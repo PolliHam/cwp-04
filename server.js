@@ -6,6 +6,14 @@ const port = 8124;
 const MAX_CONNECTIONS = parseInt(process.env.MAX_CONNECTIONS);
 let connections = 0;
 
+process.on('uncaughtException', function (err)
+{
+    console.log(err);
+});
+
+
+
+
 const server = net.createServer((client) => {
     connections++;
     console.log('Client connected');
@@ -15,6 +23,7 @@ const server = net.createServer((client) => {
     client.log = fs.createWriteStream('client'+client.id+'.txt');
     client.ACK = false;
     client.FILES = false;
+    client.REMOTE = false;
     client.dir = process.env.DEFAULT_DIR + client.id+"\\";
 
     client.on('data', (data) => {
@@ -26,11 +35,18 @@ const server = net.createServer((client) => {
             client.FILES= true;
             client.write('ACK');
         }
+        else if(data === 'REMOTE'){
+            print(client, data+'\n');
+            client.REMOTE= true;
+            client.write('ACK');
+        }
         else if (data === 'QA') {
             print(client, data + '\n');
             client.ACK = true;
             client.write('ACK');
         }
+
+
         else if(client.FILES){
             print(client,'Client: '+ data+'\n');
             let parts = data.split('|CONTENT_FILE|');
@@ -39,6 +55,39 @@ const server = net.createServer((client) => {
             file.close();
             client.write('NEXT');
             print(client, 'Server: NEXT \n');
+        }
+        else if(client.REMOTE)
+        {
+            const arg = data.split(' ');
+            switch (arg[0]) {
+                case 'COPY':
+                    console.log('COPY');
+                    let rf = fs.createReadStream(arg[1]).on('error', function(err) {
+                        print(client, 'ERROR');
+                        client.write('err');
+                    });
+                    let wf = fs.createWriteStream(arg[2]).on('error', function(err) {
+                        print(client, 'ERROR');
+                        client.write('err');
+                    });
+
+                    rf.pipe(wf).on('close',function() {
+                    print(client, 'OK');
+                    client.write('OK');
+                    });
+
+                    break;
+                case 'ENCODE':
+                    const cipher = crypto.createCipher('aes192', arg[3]);
+                    fs.createReadStream(arg[1]).pipe(cipher).pipe(fs.createWriteStream(arg[2]));
+                    client.write("OK");
+                    break;
+                case 'DECODE':
+                    const decipher = crypto.createDecipher('aes192', arg[3]);
+                    fs.createReadStream(arg[1]).pipe(decipher).pipe(fs.createWriteStream(arg[2]));
+                    client.write("OK");
+                    break;
+            }
         }
         else if(client.ACK){
             print(client,'Client: '+ data+'\n');

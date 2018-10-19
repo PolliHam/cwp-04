@@ -1,5 +1,6 @@
 const net = require('net');
 const fs = require('fs');
+const crypto = require('crypto');
 require('dotenv').config();
 const port = 8124;
 //let seed = 0;
@@ -72,19 +73,22 @@ const server = net.createServer((client) => {
                     });
 
                     rf.pipe(wf).on('close',function() {
-                    print(client, 'OK');
+                    print(client, 'COPY OK');
                     client.write('OK');
                     });
-
                     break;
+
                 case 'ENCODE':
                     const cipher = crypto.createCipher('aes192', arg[3]);
                     fs.createReadStream(arg[1]).pipe(cipher).pipe(fs.createWriteStream(arg[2]));
+                    print(client, 'ENCODE OK');
                     client.write("OK");
                     break;
+
                 case 'DECODE':
                     const decipher = crypto.createDecipher('aes192', arg[3]);
                     fs.createReadStream(arg[1]).pipe(decipher).pipe(fs.createWriteStream(arg[2]));
+                    print(client, 'DECODE OK');
                     client.write("OK");
                     break;
             }

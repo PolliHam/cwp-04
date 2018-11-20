@@ -3,20 +3,17 @@ const fs = require('fs');
 const crypto = require('crypto');
 require('dotenv').config();
 const port = 8124;
-//let seed = 0;
 const MAX_CONNECTIONS = parseInt(process.env.MAX_CONNECTIONS);
 let connections = 0;
 
 process.on('uncaughtException', function (err)
 {
-    console.log(err);
+    console.log('close');
 });
-
-
-
 
 const server = net.createServer((client) => {
     connections++;
+
     console.log('Client connected');
     client.setEncoding('utf8');
 
@@ -26,11 +23,10 @@ const server = net.createServer((client) => {
     client.FILES = false;
     client.REMOTE = false;
     client.dir = process.env.DEFAULT_DIR + client.id+"\\";
-
+    check_connection(client);
     client.on('data', (data) => {
         if (data === 'FILES')
         {
-            check_connection(client);
             fs.mkdir(client.dir, ()=>{});
             print(client, data+'\n');
             client.FILES= true;
@@ -63,19 +59,9 @@ const server = net.createServer((client) => {
             switch (arg[0]) {
                 case 'COPY':
                     console.log('COPY');
-                    let rf = fs.createReadStream(arg[1]).on('error', function(err) {
-                        print(client, 'ERROR');
-                        client.write('err');
-                    });
-                    let wf = fs.createWriteStream(arg[2]).on('error', function(err) {
-                        print(client, 'ERROR');
-                        client.write('err');
-                    });
-
-                    rf.pipe(wf).on('close',function() {
+                    fs.createReadStream(arg[1]).pipe( fs.createWriteStream(arg[2]));
                     print(client, 'COPY OK');
                     client.write('OK');
-                    });
                     break;
 
                 case 'ENCODE':
@@ -103,14 +89,14 @@ const server = net.createServer((client) => {
         else
         {
             client.write('DEC');
-            client.destroy();
         }
     });
 
-    client.on('end', () => {
+    client.on('close', () => {
         console.log('Client ' + client.id + ' disconnected');
         connections--;
     });
+
 });
 
 server.listen(port, () => {
@@ -123,8 +109,8 @@ function print(client,data) {
 }
 
 function check_connection(client) {
-    if(connections+1>MAX_CONNECTIONS){
+    if(connections>MAX_CONNECTIONS){
         print(client, 'connection limit exceeded');
-        client.destroy();
+        client.write('DEC');
     }
 }
